@@ -1,0 +1,6 @@
+---
+BasedOnStyle: LLVM
+Language: Cpp
+ColumnLimit: 0
+IndentCaseLabels: true
+IndentWidth: 4
