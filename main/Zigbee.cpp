@@ -3,8 +3,9 @@
 #include "AppEvents.h"
 #include <esp_check.h>
 #include <ha/esp_zigbee_ha_standard.h>
+#include <zcl/esp_zigbee_zcl_power_config.h>
 
-static const char *TAG = "BALTHAZAR_ZIGBEE";
+constexpr const char *TAG = "BALTHAZAR_ZIGBEE";
 static const uint8_t ZB_ENDPOINT = 0x01;
 
 /* Ugly wrap */
@@ -29,8 +30,12 @@ Zigbee::~Zigbee() {
     z = nullptr;
 }
 
-auto Zigbee::setup(esp_event_loop_handle_t loop_handle) -> Zigbee & {
+auto Zigbee::setup(esp_event_loop_handle_t loop_handle, uint32_t counter_value) -> Zigbee & {
     this->event_loop = loop_handle;
+    this->counter_value = {
+        .low = counter_value,
+        .high = 0,
+    };
 
     esp_zb_platform_config_t config = {
         .radio_config = {
@@ -61,15 +66,19 @@ auto Zigbee::start() -> Zigbee & {
 
     // Cluster list
     esp_zb_cluster_list_t *cluster_list = esp_zb_zcl_cluster_list_create();
-    esp_zb_cluster_list_add_basic_cluster(cluster_list, create_basic_cluster(), ESP_ZB_ZCL_CLUSTER_SERVER_ROLE);
-    esp_zb_cluster_list_add_identify_cluster(cluster_list, create_identify_cluster(), ESP_ZB_ZCL_CLUSTER_SERVER_ROLE);
-    esp_zb_cluster_list_add_power_config_cluster(cluster_list, create_power_config_cluster(), ESP_ZB_ZCL_CLUSTER_SERVER_ROLE);
-    esp_zb_cluster_list_add_time_cluster(cluster_list, create_time_cluster(), ESP_ZB_ZCL_CLUSTER_CLIENT_ROLE);
-    esp_zb_cluster_list_add_metering_cluster(cluster_list, create_metering_cluster(), ESP_ZB_ZCL_CLUSTER_SERVER_ROLE);
+    ESP_ERROR_CHECK(add_basic_cluster(cluster_list));
+    ESP_ERROR_CHECK(add_identify_cluster(cluster_list));
+    ESP_ERROR_CHECK(add_power_config_cluster(cluster_list));
+    ESP_ERROR_CHECK(add_metering_cluster(cluster_list));
 
     // Endpoint list
     esp_zb_ep_list_t *endpoint_list = esp_zb_ep_list_create();
-    ESP_ERROR_CHECK(esp_zb_ep_list_add_ep(endpoint_list, cluster_list, ZB_ENDPOINT, ESP_ZB_AF_HA_PROFILE_ID, ESP_ZB_HA_METER_INTERFACE_DEVICE_ID));
+    esp_zb_endpoint_config_t endpoint = {
+        .endpoint = ZB_ENDPOINT,
+        .app_profile_id = ESP_ZB_AF_HA_PROFILE_ID,
+        .app_device_id = ESP_ZB_HA_ON_OFF_LIGHT_DEVICE_ID,
+        .app_device_version = 0};
+    ESP_ERROR_CHECK(esp_zb_ep_list_add_ep(endpoint_list, cluster_list, endpoint));
     ESP_ERROR_CHECK(esp_zb_device_register(endpoint_list));
 
     // Start
@@ -112,94 +121,24 @@ auto Zigbee::loop() -> void {
 auto Zigbee::reset() -> void {
     esp_zb_factory_reset();
 }
-
-#include <string.h>
 auto Zigbee::update(uint32_t value) -> void {
+    this->counter_value.low = value;
 
-    // -> esp_zb_zcl_set_attribute_val(). It will automatically report the change using the configured reporting interval.
-
-    esp_zb_uint48_t current_summation_delivered = {
-        .low = value,
-        .high = 0,
-    };
-
-    auto status = esp_zb_zcl_set_attribute_val(ZB_ENDPOINT,
-                                               ESP_ZB_ZCL_CLUSTER_ID_METERING,
-                                               ESP_ZB_ZCL_CLUSTER_SERVER_ROLE,
-                                               ESP_ZB_ZCL_ATTR_METERING_CURRENT_SUMMATION_DELIVERED_ID,
-                                               &current_summation_delivered,
-                                               false);
+    esp_zb_lock_acquire(portMAX_DELAY);
+    esp_zb_zcl_status_t status = esp_zb_zcl_set_attribute_val(ZB_ENDPOINT,
+                                                              ESP_ZB_ZCL_CLUSTER_ID_METERING,
+                                                              ESP_ZB_ZCL_CLUSTER_SERVER_ROLE,
+                                                              ESP_ZB_ZCL_ATTR_METERING_CURRENT_SUMMATION_DELIVERED_ID,
+                                                              &this->counter_value,
+                                                              false);
+    esp_zb_lock_release();
     if (status != ESP_ZB_ZCL_STATUS_SUCCESS) {
         ESP_LOGW(TAG, "Set current summation not success (status: 0x%02x)", status);
     }
-
-    esp_zb_zcl_attr_location_info_t attr_info = {
-        .endpoint_id = ZB_ENDPOINT,
-        .cluster_id = ESP_ZB_ZCL_CLUSTER_ID_METERING,
-        .cluster_role = ESP_ZB_ZCL_CLUSTER_SERVER_ROLE,
-        .manuf_code = 0x00,
-        .attr_id = ESP_ZB_ZCL_ATTR_METERING_CURRENT_SUMMATION_DELIVERED_ID,
-    };
-
-    auto res = esp_zb_zcl_find_reporting_info(attr_info);
-    if (res == NULL) {
-        ESP_LOGE(TAG, "null");
-    }
-
-
-    // esp_zb_zcl_reset_all_reporting_info();
-
-    /// --> NOT WORKING
-    // auto status = esp_zb_zcl_set_attribute_val(ZB_ENDPOINT,
-    //                                            ESP_ZB_ZCL_CLUSTER_ID_METERING,
-    //                                            ESP_ZB_ZCL_CLUSTER_SERVER_ROLE,
-    //                                            ESP_ZB_ZCL_ATTR_METERING_CURRENT_SUMMATION_DELIVERED_ID,
-    //                                            &current_summation_delivered,
-    //                                            true);
-    // if (status != ESP_ZB_ZCL_STATUS_SUCCESS) {
-    //     ESP_LOGW(TAG, "Set current summation not success (status: 0x%02x)", status);
-    // }
-
-    // /// WORKAROUND
-    // auto value_r = esp_zb_zcl_get_attribute(ZB_ENDPOINT,
-    //                                         ESP_ZB_ZCL_CLUSTER_ID_METERING,
-    //                                         ESP_ZB_ZCL_CLUSTER_SERVER_ROLE,
-    //                                         ESP_ZB_ZCL_ATTR_METERING_CURRENT_SUMMATION_DELIVERED_ID);
-    // memcpy(value_r->data_p, &current_summation_delivered, sizeof(current_summation_delivered));
-
-    // ---> REPORT NOT WORKING
-    // esp_zb_zcl_report_attr_cmd_t cmd = {
-    //     .zcl_basic_cmd = {
-    //         .dst_addr_u = {
-    //             .addr_short = 0x0000,
-    //         },
-    //         .dst_endpoint = ZB_ENDPOINT,
-    //         .src_endpoint = ZB_ENDPOINT,
-    //     },
-    //     .address_mode = ESP_ZB_APS_ADDR_MODE_DST_ADDR_ENDP_NOT_PRESENT,
-    //     .clusterID = ESP_ZB_ZCL_CLUSTER_ID_METERING,
-    //     .cluster_role = ESP_ZB_ZCL_CLUSTER_SERVER_ROLE,
-    //     .attributeID = ESP_ZB_ZCL_ATTR_METERING_CURRENT_SUMMATION_DELIVERED_ID,
-    // };
-
-    // esp_zb_zcl_report_attr_cmd_t cmd = {
-    //     .zcl_basic_cmd = {
-    //         .dst_addr_u = {
-    //             .addr_short = 0x0000,
-    //         },
-    //         .dst_endpoint = ZB_ENDPOINT,
-    //         .src_endpoint = ZB_ENDPOINT,
-    //     },
-    //     .address_mode = ESP_ZB_APS_ADDR_MODE_DST_ADDR_ENDP_NOT_PRESENT,
-    //     .clusterID = ESP_ZB_ZCL_CLUSTER_ID_METERING,
-    //     .cluster_role = ESP_ZB_ZCL_CLUSTER_SERVER_ROLE,
-    //     .attributeID = ESP_ZB_ZCL_ATTR_METERING_INSTANTANEOUS_DEMAND_ID,
-    // };
-    // esp_zb_zcl_report_attr_cmd_req(&cmd);
 }
 
 // Clusters
-auto Zigbee::create_basic_cluster() -> esp_zb_attribute_list_t * {
+auto Zigbee::add_basic_cluster(esp_zb_cluster_list_t *cluster_list) -> esp_err_t {
     esp_zb_basic_cluster_cfg_t config = {
         .zcl_version = ESP_ZB_ZCL_BASIC_ZCL_VERSION_DEFAULT_VALUE,
         .power_source = 0x03, // Battery
@@ -207,7 +146,7 @@ auto Zigbee::create_basic_cluster() -> esp_zb_attribute_list_t * {
     uint32_t app_version = 0x0001;
     uint32_t stack_version = 0x0002;
     uint32_t hw_version = 0x0001;
-    uint8_t manufacturer_name[] = {6, 'A', 'q', 'w', 's', 'k', 'i'};
+    uint8_t manufacturer_name[] = {7, 'g', 'b', 'r', 'e', 'd', 'z', '1'};
     uint8_t model_identifier[] = {9, 'B', 'a', 'l', 't', 'h', 'a', 'Z', 'a', 'r'};
     uint8_t date_code[] = {8, '2', '0', '2', '3', '1', '0', '0', '6'};
     uint8_t sw_build[] = {5, '0', '.', '0', '.', '1'};
@@ -220,37 +159,31 @@ auto Zigbee::create_basic_cluster() -> esp_zb_attribute_list_t * {
     esp_zb_basic_cluster_add_attr(cluster, ESP_ZB_ZCL_ATTR_BASIC_DATE_CODE_ID, date_code);
     esp_zb_basic_cluster_add_attr(cluster, ESP_ZB_ZCL_ATTR_BASIC_SW_BUILD_ID, sw_build);
 
-    return cluster;
+    return esp_zb_cluster_list_add_basic_cluster(cluster_list, cluster, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE);
 }
-auto Zigbee::create_identify_cluster() -> esp_zb_attribute_list_t * {
+auto Zigbee::add_identify_cluster(esp_zb_cluster_list_t *cluster_list) -> esp_err_t {
     esp_zb_identify_cluster_cfg_t config = {
-        .identify_time = 0,
+        .identify_time = ESP_ZB_ZCL_IDENTIFY_IDENTIFY_TIME_DEFAULT_VALUE,
     };
     esp_zb_attribute_list_t *cluster = esp_zb_identify_cluster_create(&config);
 
-    return cluster;
+    return esp_zb_cluster_list_add_identify_cluster(cluster_list, cluster, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE);
 }
-auto Zigbee::create_power_config_cluster() -> esp_zb_attribute_list_t * {
+auto Zigbee::add_power_config_cluster(esp_zb_cluster_list_t *cluster_list) -> esp_err_t {
     esp_zb_power_config_cluster_cfg_t config = {};
 
     esp_zb_attribute_list_t *cluster = esp_zb_power_config_cluster_create(&config);
     uint8_t battery_voltage = 0xFE;           // 0x01 = 100mV, 0x02 = 200mV, 0xFF = invalid or unknown
-    uint8_t battery_percent_remaining = 0xC8; // 0x00 = 0%, 0x64=50%, 0xC8=100%
-    esp_zb_power_config_cluster_add_attr(cluster, 0x0020, &battery_voltage);
-    esp_zb_power_config_cluster_add_attr(cluster, 0x0021, &battery_percent_remaining);
+    uint8_t battery_percent_remaining = 0x64; // 0x00 = 0%, 0x64=50%, 0xC8=100%
+    esp_zb_power_config_cluster_add_attr(cluster, ESP_ZB_ZCL_ATTR_POWER_CONFIG_BATTERY_VOLTAGE_ID, &battery_voltage);
+    esp_zb_power_config_cluster_add_attr(cluster, ESP_ZB_ZCL_ATTR_POWER_CONFIG_BATTERY_PERCENTAGE_REMAINING_ID, &battery_percent_remaining);
 
-    return cluster;
+    return esp_zb_cluster_list_add_power_config_cluster(cluster_list, cluster, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE);
 }
-auto Zigbee::create_time_cluster() -> esp_zb_attribute_list_t * {
-    return esp_zb_zcl_attr_list_create(ESP_ZB_ZCL_CLUSTER_ID_TIME);
-}
-auto Zigbee::create_metering_cluster() -> esp_zb_attribute_list_t * {
+auto Zigbee::add_metering_cluster(esp_zb_cluster_list_t *cluster_list) const -> esp_err_t {
     esp_zb_metering_cluster_cfg_t config = {
-        .current_summation_delivered = {
-            .low = 0,
-            .high = 0,
-        },
-        .status = 0,
+        .current_summation_delivered = this->counter_value,
+        .status = ESP_ZB_ZCL_METERING_ALARM_CHECK_METER,
         .uint_of_measure = ESP_ZB_ZCL_METERING_UNIT_M3_M3H_BINARY,
         .summation_formatting = ESP_ZB_ZCL_METERING_FORMATTING_SET(true, 5, 2),
         .metering_device_type = ESP_ZB_ZCL_METERING_GAS_METERING,
@@ -273,10 +206,10 @@ auto Zigbee::create_metering_cluster() -> esp_zb_attribute_list_t * {
                             ESP_ZB_ZCL_CLUSTER_ID_METERING,
                             ESP_ZB_ZCL_ATTR_METERING_INSTANTANEOUS_DEMAND_ID,
                             ESP_ZB_ZCL_ATTR_TYPE_S24,
-                            ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY,
+                            ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY | ESP_ZB_ZCL_ATTR_ACCESS_REPORTING,
                             &instantaneous_demand);
 
-    return cluster;
+    return esp_zb_cluster_list_add_metering_cluster(cluster_list, cluster, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE);
 }
 
 // Actions handlers
@@ -347,18 +280,7 @@ auto Zigbee::signal(esp_zb_app_signal_t *signal) -> void {
 
         case ESP_ZB_BDB_SIGNAL_DEVICE_FIRST_START:
         case ESP_ZB_BDB_SIGNAL_DEVICE_REBOOT:
-            if (err_status == ESP_OK) {
-                ESP_LOGI(TAG, "Start network steering");
-                esp_zb_bdb_start_top_level_commissioning(ESP_ZB_BDB_MODE_NETWORK_STEERING);
-                ESP_ERROR_CHECK(esp_event_post_to(event_loop,
-                                                  APP_EVENTS,
-                                                  EV_ZB_STEERING_START,
-                                                  NULL,
-                                                  0,
-                                                  portMAX_DELAY));
-            } else {
-                ESP_LOGW(TAG, "Failed to initialize Zigbee stack (status: %s)", esp_err_to_name(err_status));
-            }
+            signal_boot(err_status);
             break;
 
         case ESP_ZB_BDB_SIGNAL_STEERING:
@@ -377,6 +299,29 @@ auto Zigbee::signal_skip_startup() -> void {
     ESP_LOGI(TAG, "Zigbee stack initialized");
     esp_zb_bdb_start_top_level_commissioning(ESP_ZB_BDB_MODE_INITIALIZATION);
 }
+auto Zigbee::signal_boot(esp_err_t err) -> void {
+    if (err != ESP_OK) {
+        /* commissioning failed */
+        ESP_LOGW(TAG, "Failed to initialize Zigbee stack (status: %s)", esp_err_to_name(err));
+        // esp_zb_scheduler_alarm((esp_zb_callback_t)bdb_start_top_level_commissioning_cb, ESP_ZB_BDB_MODE_NETWORK_STEERING, 1000);
+        return;
+    }
+
+    ESP_LOGI(TAG, "Device started up in %s factory-reset mode", esp_zb_bdb_is_factory_new() ? "" : "non");
+    if (esp_zb_bdb_is_factory_new()) {
+        ESP_LOGI(TAG, "Start network steering");
+        esp_zb_bdb_start_top_level_commissioning(ESP_ZB_BDB_MODE_NETWORK_STEERING);
+        ESP_ERROR_CHECK(esp_event_post_to(event_loop,
+                                          APP_EVENTS,
+                                          EV_ZB_STEERING_START,
+                                          NULL,
+                                          0,
+                                          portMAX_DELAY));
+    } else {
+        // zb_deep_sleep_start();
+        ESP_LOGI(TAG, "Device rebooted");
+    }
+}
 auto Zigbee::signal_sterring(esp_err_t err) -> void {
     if (err == ESP_OK) {
         esp_zb_ieee_addr_t extended_pan_id;
@@ -385,6 +330,25 @@ auto Zigbee::signal_sterring(esp_err_t err) -> void {
                  extended_pan_id[7], extended_pan_id[6], extended_pan_id[5], extended_pan_id[4],
                  extended_pan_id[3], extended_pan_id[2], extended_pan_id[1], extended_pan_id[0],
                  esp_zb_get_pan_id(), esp_zb_get_current_channel());
+
+        esp_zb_zdo_ieee_addr_req_param_t ieee_req;
+        ieee_req.addr_of_interest = 0;
+        ieee_req.dst_nwk_addr = 0;
+        ieee_req.request_type = 0;
+        ieee_req.start_index = 0;
+
+        esp_zb_zdo_ieee_addr_req(
+            &ieee_req, [](esp_zb_zdp_status_t zdo_status, esp_zb_ieee_addr_t ieee_addr, void *user_ctx) {
+                if (zdo_status != ESP_ZB_ZDP_STATUS_SUCCESS) {
+                    ESP_LOGE(TAG, "zdo_status: 0x%02x", zdo_status);
+                    return;
+                }
+
+                ESP_LOGI(TAG, "IEEE address: %02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x",
+                         ieee_addr[7], ieee_addr[6], ieee_addr[5], ieee_addr[4],
+                         ieee_addr[3], ieee_addr[2], ieee_addr[1], ieee_addr[0]);
+            },
+            NULL);
 
     } else {
         ESP_LOGI(TAG, "Network steering was not successful (status: %s)", esp_err_to_name(err));
@@ -399,21 +363,3 @@ auto Zigbee::signal_sterring(esp_err_t err) -> void {
                                       1,
                                       portMAX_DELAY));
 }
-
-// void reportAttribute(uint8_t endpoint, uint16_t clusterID, uint16_t attributeID, void *value, uint8_t value_length)
-// {
-//     esp_zb_zcl_report_attr_cmd_t cmd = {
-//         .zcl_basic_cmd = {
-//             .dst_addr_u.addr_short = 0x0000,
-//             .dst_endpoint = endpoint,
-//             .src_endpoint = endpoint,
-//         },
-//         .address_mode = ESP_ZB_APS_ADDR_MODE_16_ENDP_PRESENT,
-//         .clusterID = clusterID,
-//         .attributeID = attributeID,
-//         .cluster_role = ESP_ZB_ZCL_CLUSTER_SERVER_ROLE,
-//     };
-//     esp_zb_zcl_attr_t *value_r = esp_zb_zcl_get_attribute(endpoint, clusterID, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE, attributeID);
-//     memcpy(value_r->data_p, value, value_length);
-//     esp_zb_zcl_report_attr_cmd_req(&cmd);
-// }

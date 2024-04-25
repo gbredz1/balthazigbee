@@ -4,6 +4,8 @@
 #include <esp_log.h>
 
 static const char *TAG = "BALTHAZAR_BUTTONS";
+const auto BT0_GPIO = GPIO_NUM_4;
+const auto BT1_GPIO = GPIO_NUM_5;
 
 Buttons::Buttons() {
 }
@@ -28,7 +30,7 @@ auto Buttons::setup(esp_event_loop_handle_t loop_handle) -> void {
         .long_press_time = BUTTON_LONG_PRESS_TIME_MS,
         .short_press_time = 380,
         .gpio_button_config = {
-            .gpio_num = 0,
+            .gpio_num = BT0_GPIO,
             .active_level = 0,
         },
     };
@@ -44,7 +46,7 @@ auto Buttons::setup(esp_event_loop_handle_t loop_handle) -> void {
         .long_press_time = BUTTON_LONG_PRESS_TIME_MS,
         .short_press_time = BUTTON_SHORT_PRESS_TIME_MS,
         .gpio_button_config = {
-            .gpio_num = 1,
+            .gpio_num = BT1_GPIO,
             .active_level = 0,
         },
     };

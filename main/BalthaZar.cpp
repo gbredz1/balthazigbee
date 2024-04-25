@@ -24,7 +24,7 @@ auto BalthaZar::init() -> BalthaZar & {
     event_init();
 
     counter.init();
-    zigbee.setup(event_handle);
+    zigbee.setup(event_handle, counter.read());
     buttons.setup(event_handle);
 
     led.stop();
@@ -144,7 +144,6 @@ auto BalthaZar::zigbee_task() -> void {
     ESP_LOGI(TAG, "Zigbee task started");
 
     zigbee.start();
-    zigbee.update(counter.read());
     zigbee.loop();
 
     vTaskDelete(NULL);
