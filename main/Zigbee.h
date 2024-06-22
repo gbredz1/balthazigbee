@@ -32,11 +32,11 @@ class Zigbee {
     auto add_metering_cluster(esp_zb_cluster_list_t *) const -> esp_err_t;
 
     // Actions handlers
-    auto action_set_attribut(esp_zb_zcl_set_attr_value_message_t *) -> esp_err_t;
+    auto action_set_attribut(const esp_zb_zcl_set_attr_value_message_t *) -> esp_err_t;
     auto action_identify_notify(uint8_t) -> void;
 
     // Signals
-    auto signal_skip_startup() -> void;
+    auto signal_skip_startup() const -> void;
     auto signal_boot(esp_err_t) -> void;
     auto signal_sterring(esp_err_t) -> void;
 };

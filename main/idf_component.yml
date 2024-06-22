@@ -2,11 +2,11 @@
 dependencies:
   espressif/button: "=*"
   espressif/led_strip: "^2.5.2"
-  espressif/esp-zboss-lib: "^1.0.2"
-  espressif/esp-zigbee-lib: "^1.0.2"
+  espressif/esp-zboss-lib: "^1.3.2"
+  espressif/esp-zigbee-lib: "^1.3.2"
   ## Required IDF version
   idf:
-    version: ">=4.1.0"
+    version: ">=5.0.0"
   # # Put list of dependencies here
   # # For components maintained by Espressif:
   # component: "~1.0.0"

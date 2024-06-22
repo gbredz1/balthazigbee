@@ -45,26 +45,10 @@ auto BalthaZar::start() -> void {
 
     xTaskCreate([](void *) { app.zigbee_task(); },
                 "Zigbee",
-                configMINIMAL_STACK_SIZE + 2048,
+                configMINIMAL_STACK_SIZE + 4096,
                 NULL,
                 tskIDLE_PRIORITY + 10,
                 NULL);
-
-    // // DEBUG
-    //
-    // for (;;) {
-    //     vTaskGetRunTimeStats(buffer);
-    //     ESP_LOGI(TAG, "Runtime Stats:\nTask\t\tAbs Time\t%% Time\n%s", buffer);
-    //     vTaskList(buffer);
-    //     ESP_LOGI(TAG, "TaskList:\nTask\t\tState Priority Stack\tNum\n%s", buffer);
-
-    //     ESP_LOGI(TAG, "stack %d, free dram heaps %d, free internal memory %d",
-    //              uxTaskGetStackHighWaterMark(NULL),
-    //              heap_caps_get_free_size(MALLOC_CAP_8BIT),
-    //              heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
-
-    //     vTaskDelay(pdMS_TO_TICKS(10000));
-    // }
 }
 
 auto BalthaZar::event_init() -> void {
