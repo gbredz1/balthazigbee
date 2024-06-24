@@ -1,8 +1,8 @@
 #pragma once
 
 #include "Buttons.h"
-#include "Counter.h"
 #include "Led.h"
+#include "StateStore.h"
 #include "Zigbee.h"
 
 /**
@@ -14,17 +14,20 @@ class BalthaZar {
     Led led;
     Zigbee zigbee;
     Buttons buttons;
-    Counter counter;
+    StateStore stateStore;
     bool running;
     esp_event_loop_handle_t event_handle;
+    State state;
 
   public:
     auto init() -> BalthaZar &;
     auto start() -> void;
+    auto load() -> BalthaZar &;
+    auto save() const -> void;
 
   private:
     auto event_init() -> void;
-    auto event_handler(void *, esp_event_base_t, int32_t, void *) -> void;
+    auto event_handler(esp_event_base_t, int32_t, void *) -> void;
     auto led_task() -> void;
     auto zigbee_task() -> void;
 

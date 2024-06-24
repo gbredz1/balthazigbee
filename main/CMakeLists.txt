@@ -1,2 +1,2 @@
-idf_component_register(SRCS "Zigbee.cpp" "BalthaZar.cpp" "Led.cpp" "Buttons.cpp" "Counter.cpp"
+idf_component_register(SRCS "StateStore.cpp" "Zigbee.cpp" "BalthaZar.cpp" "Led.cpp" "Buttons.cpp"
                     INCLUDE_DIRS ".")

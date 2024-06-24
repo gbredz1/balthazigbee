@@ -8,13 +8,13 @@
 
 ESP_EVENT_DEFINE_BASE(APP_EVENTS);
 
-static const char *TAG = "BALTHAZAR";
-static BalthaZar app;
+constexpr const char *TAG = "BALTHAZAR";
 
 extern "C" void app_main(void) {
     ESP_LOGI(TAG, "Zigbee Gazpar");
-
-    app.init()
+    (new BalthaZar())
+        ->init()
+        .load()
         .start();
 }
 
@@ -23,8 +23,8 @@ auto BalthaZar::init() -> BalthaZar & {
     ESP_ERROR_CHECK(nvs_flash_init());
     event_init();
 
-    counter.init();
-    zigbee.setup(event_handle, counter.read());
+    stateStore.init();
+    zigbee.setup(event_handle);
     buttons.setup(event_handle);
 
     led.stop();
@@ -36,26 +36,44 @@ auto BalthaZar::start() -> void {
     ESP_LOGI(TAG, "start");
     running = true;
 
-    xTaskCreate([](void *) { app.led_task(); },
+    xTaskCreate([](void *m_this) { ((BalthaZar *)m_this)->led_task(); },
                 "Led",
                 configMINIMAL_STACK_SIZE + 256,
-                NULL,
+                this,
                 tskIDLE_PRIORITY + 5,
-                NULL);
+                nullptr);
 
-    xTaskCreate([](void *) { app.zigbee_task(); },
+    xTaskCreate([](void *m_this) { ((BalthaZar *)m_this)->zigbee_task(); },
                 "Zigbee",
                 configMINIMAL_STACK_SIZE + 4096,
-                NULL,
+                this,
                 tskIDLE_PRIORITY + 10,
-                NULL);
+                nullptr);
+}
+
+auto BalthaZar::save() const -> void {
+    if (stateStore.save(&state) == ESP_OK) {
+        ESP_LOGI(TAG, "Save state OK");
+    } else {
+        ESP_LOGE(TAG, "Save state FAILED");
+    }
+}
+
+auto BalthaZar::load() -> BalthaZar & {
+    if (stateStore.load(state) == ESP_OK) {
+        ESP_LOGI(TAG, "Load state OK");
+    } else {
+        ESP_LOGE(TAG, "Load state FAILED");
+    }
+
+    return *this;
 }
 
 auto BalthaZar::event_init() -> void {
     esp_event_loop_args_t loop_args = {
         .queue_size = 10,
         .task_name = "app_event_task",
-        .task_priority = uxTaskPriorityGet(NULL),
+        .task_priority = uxTaskPriorityGet(nullptr),
         .task_stack_size = 32768,
         .task_core_id = tskNO_AFFINITY,
     };
@@ -64,17 +82,16 @@ auto BalthaZar::event_init() -> void {
         event_handle,
         APP_EVENTS,
         ESP_EVENT_ANY_ID,
-        [](void *arg,
+        [](void *m_this,
            esp_event_base_t event_base,
            int32_t event_id,
            void *event_data) {
-            app.event_handler(arg, event_base, event_id, event_data);
+            ((BalthaZar *)m_this)->event_handler(event_base, event_id, event_data);
         },
-        NULL));
+        this));
 }
 
-auto BalthaZar::event_handler(void *arg,
-                              esp_event_base_t event_base,
+auto BalthaZar::event_handler(esp_event_base_t,
                               int32_t event_id,
                               void *event_data) -> void {
 
@@ -96,13 +113,15 @@ auto BalthaZar::event_handler(void *arg,
             break;
         case EV_BT_0:
             ESP_LOGI(TAG, "EV_BT_0");
-            ESP_LOGI(TAG, "counter: %lu", counter.read());
+            ESP_LOGI(TAG, "counter: %llu", state.summation_delivered);
             debug_info();
             break;
         case EV_BT_1:
             ESP_LOGI(TAG, "EV_BT_1");
-            counter.increment();
-            zigbee.update(counter.read());
+            state.summation_delivered += 1;
+            save();
+            zigbee.update_and_report(state.summation_delivered);
+
             break;
         default:
             ESP_LOGI(TAG, "Event %lu", event_id);
@@ -120,7 +139,7 @@ auto BalthaZar::led_task() -> void {
         led.update();
     }
 
-    vTaskDelete(NULL);
+    vTaskDelete(nullptr);
     ESP_LOGI(TAG, "Led task finished");
 }
 
@@ -130,7 +149,7 @@ auto BalthaZar::zigbee_task() -> void {
     zigbee.start();
     zigbee.loop();
 
-    vTaskDelete(NULL);
+    vTaskDelete(nullptr);
     ESP_LOGI(TAG, "Zigbee task finished");
 }
 
@@ -152,7 +171,7 @@ auto BalthaZar::debug_info() -> void {
     ESP_LOGI(TAG, "TaskList:\nTask\t\tState Priority Stack\tNum\n%s", buffer);
 
     ESP_LOGI(TAG, "stack %d, free dram heaps %d, free internal memory %d",
-             uxTaskGetStackHighWaterMark(NULL),
+             uxTaskGetStackHighWaterMark(nullptr),
              heap_caps_get_free_size(MALLOC_CAP_8BIT),
              heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
 }
