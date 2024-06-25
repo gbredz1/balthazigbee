@@ -19,7 +19,7 @@ class Led {
   private:
     double m_anim = 0;
     led_strip_handle_t m_handle;
-    Color m_color;
+    Color m_color = {0, 0, 0};
     bool m_running = false;
 
   public:

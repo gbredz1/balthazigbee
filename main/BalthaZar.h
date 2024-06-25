@@ -12,7 +12,7 @@
 class BalthaZar {
   private:
     Led led;
-    Zigbee zigbee;
+    Zigbee::Zigbee zigbee;
     Buttons buttons;
     StateStore stateStore;
     bool running;

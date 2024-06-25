@@ -3,13 +3,11 @@
 #include "AppEvents.h"
 #include <esp_log.h>
 
-static const char *TAG = "BALTHAZAR_BUTTONS";
+constexpr const char *TAG = "BALTHAZAR_BUTTONS";
 const auto BT0_GPIO = GPIO_NUM_4;
 const auto BT1_GPIO = GPIO_NUM_5;
 
-Buttons::Buttons() {
-}
-
+Buttons::Buttons() = default;
 Buttons::~Buttons() {
     if (!has_been_setup) {
         return;
@@ -36,7 +34,7 @@ auto Buttons::setup(esp_event_loop_handle_t loop_handle) -> void {
     };
 
     bt_0_handle = iot_button_create(&bt0_config);
-    if (NULL == bt_0_handle) {
+    if (nullptr == bt_0_handle) {
         ESP_LOGE(TAG, "bt_0_handle create failed");
         return;
     }
@@ -52,7 +50,7 @@ auto Buttons::setup(esp_event_loop_handle_t loop_handle) -> void {
     };
 
     bt_1_handle = iot_button_create(&bt1_config);
-    if (NULL == bt_1_handle) {
+    if (nullptr == bt_1_handle) {
         ESP_LOGE(TAG, "bt_1_handle create failed");
         return;
     }
@@ -60,11 +58,11 @@ auto Buttons::setup(esp_event_loop_handle_t loop_handle) -> void {
     has_been_setup = true;
 
     iot_button_register_cb(
-        bt_0_handle, BUTTON_SINGLE_CLICK, [](void *arg, void *usr_data) {
+        bt_0_handle, BUTTON_SINGLE_CLICK, [](void *, void *usr_data) {
             ESP_ERROR_CHECK(esp_event_post_to((esp_event_loop_handle_t)usr_data,
                                               APP_EVENTS,
                                               EV_BT_0,
-                                              NULL,
+                                              nullptr,
                                               0,
                                               portMAX_DELAY));
         },
@@ -74,22 +72,22 @@ auto Buttons::setup(esp_event_loop_handle_t loop_handle) -> void {
     btn_cfg.event = BUTTON_MULTIPLE_CLICK;
     btn_cfg.event_data.multiple_clicks.clicks = 4;
     iot_button_register_event_cb(
-        bt_0_handle, btn_cfg, [](void *arg, void *usr_data) {
+        bt_0_handle, btn_cfg, [](void *, void *usr_data) {
             ESP_ERROR_CHECK(esp_event_post_to((esp_event_loop_handle_t)usr_data,
                                               APP_EVENTS,
                                               EV_RESET,
-                                              NULL,
+                                              nullptr,
                                               0,
                                               portMAX_DELAY));
         },
         loop_handle);
 
     iot_button_register_cb(
-        bt_1_handle, BUTTON_SINGLE_CLICK, [](void *arg, void *usr_data) {
+        bt_1_handle, BUTTON_SINGLE_CLICK, [](void *, void *usr_data) {
             ESP_ERROR_CHECK(esp_event_post_to((esp_event_loop_handle_t)usr_data,
                                               APP_EVENTS,
                                               EV_BT_1,
-                                              NULL,
+                                              nullptr,
                                               0,
                                               portMAX_DELAY));
         },

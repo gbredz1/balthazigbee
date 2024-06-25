@@ -2,8 +2,9 @@
 
 #include "AppEvents.h"
 #include <esp_check.h>
-#include <ha/esp_zigbee_ha_standard.h>
 #include <zcl/esp_zigbee_zcl_power_config.h>
+
+namespace Zigbee {
 
 constexpr const char *TAG = "BALTHAZAR_ZIGBEE";
 static const uint8_t ZB_ENDPOINT = 0x01;
@@ -41,7 +42,7 @@ auto Zigbee::setup(esp_event_loop_handle_t loop_handle) -> Zigbee & {
 
     return *this;
 }
-auto Zigbee::start() -> Zigbee & {
+auto Zigbee::start(const State state) -> Zigbee & {
     // Network config
     esp_zb_cfg_t network_config;
     network_config.esp_zb_role = ESP_ZB_DEVICE_TYPE_ED;
@@ -69,6 +70,10 @@ auto Zigbee::start() -> Zigbee & {
 
     // Register the device
     ESP_ERROR_CHECK(esp_zb_device_register(endpoint_list));
+
+    // Update Attributes values
+    update(AttributeSummationDelivered(state.summation_delivered));
+    update(AttributeBatteryPercentage(state.battery_percent));
 
     // Start
     esp_zb_core_action_handler_register(
@@ -99,61 +104,45 @@ auto Zigbee::loop() const -> void {
 auto Zigbee::reset() const -> void {
     esp_zb_factory_reset();
 }
-auto Zigbee::update_and_report(uint64_t value) const -> void {
-    esp_zb_int48_t counter;
-    counter.low = value & 0xFFFF;
-    counter.high = (value >> 32) & 0xFF;
-
+auto Zigbee::update_then_report(const Attribute attr) const -> void {
+    update(attr);
+    report(attr);
+}
+auto Zigbee::update(const Attribute attr) const -> void {
     esp_zb_lock_acquire(portMAX_DELAY);
     esp_zb_zcl_status_t status = esp_zb_zcl_set_attribute_val(ZB_ENDPOINT,
-                                                              ESP_ZB_ZCL_CLUSTER_ID_METERING,
+                                                              attr.cluster_id,
                                                               ESP_ZB_ZCL_CLUSTER_SERVER_ROLE,
-                                                              ESP_ZB_ZCL_ATTR_METERING_CURRENT_SUMMATION_DELIVERED_ID,
-                                                              &counter,
+                                                              attr.attribute_id,
+                                                              (void *)&attr.value,
                                                               false);
+    ESP_EARLY_LOGI(TAG, "@SetAttribute: %04x|%04x = %08x",
+                   attr.cluster_id,
+                   attr.attribute_id,
+                   attr.value);
     esp_zb_lock_release();
-    ESP_EARLY_LOGI(TAG, "Update counter value: %d", value);
     if (status != ESP_ZB_ZCL_STATUS_SUCCESS) {
-        ESP_LOGW(TAG, "Set current summation not success (status: 0x%02x)", status);
+        ESP_LOGW(TAG, "@SetAttribute failed!: %04x|%04x (status: 0x%02x)",
+                 attr.cluster_id,
+                 attr.attribute_id,
+                 status);
     }
-
-    /* Send report attributes command */
+}
+auto Zigbee::report(const Attribute attr) const -> void {
     esp_zb_zcl_report_attr_cmd_t report_attr_cmd;
     report_attr_cmd.address_mode = ESP_ZB_APS_ADDR_MODE_DST_ADDR_ENDP_NOT_PRESENT;
-    report_attr_cmd.attributeID = ESP_ZB_ZCL_ATTR_METERING_CURRENT_SUMMATION_DELIVERED_ID;
+    report_attr_cmd.attributeID = attr.attribute_id;
     report_attr_cmd.cluster_role = ESP_ZB_ZCL_CLUSTER_SERVER_ROLE;
-    report_attr_cmd.clusterID = ESP_ZB_ZCL_CLUSTER_ID_METERING;
+    report_attr_cmd.clusterID = attr.cluster_id;
     report_attr_cmd.zcl_basic_cmd.src_endpoint = ZB_ENDPOINT;
+
+    ESP_EARLY_LOGI(TAG, "@ReportAttribute: %04x|%04x",
+                   attr.cluster_id,
+                   attr.attribute_id);
 
     esp_zb_lock_acquire(portMAX_DELAY);
     ESP_ERROR_CHECK_WITHOUT_ABORT(esp_zb_zcl_report_attr_cmd_req(&report_attr_cmd));
     esp_zb_lock_release();
-    ESP_EARLY_LOGI(TAG, "Send 'report attributes' command");
-
-    {
-        uint8_t c = value % 2 == 0 ? 50 : 200;
-        esp_zb_lock_acquire(portMAX_DELAY);
-        esp_zb_zcl_status_t s = esp_zb_zcl_set_attribute_val(ZB_ENDPOINT,
-                                                             ESP_ZB_ZCL_CLUSTER_ID_POWER_CONFIG,
-                                                             ESP_ZB_ZCL_CLUSTER_SERVER_ROLE,
-                                                             ESP_ZB_ZCL_ATTR_POWER_CONFIG_BATTERY_PERCENTAGE_REMAINING_ID,
-                                                             &c,
-                                                             false);
-        esp_zb_lock_release();
-        if (s != ESP_ZB_ZCL_STATUS_SUCCESS) {
-            ESP_LOGW(TAG, "Set battery %% not success (status: 0x%02x)", s);
-        }
-
-        esp_zb_zcl_report_attr_cmd_t report;
-        report.address_mode = ESP_ZB_APS_ADDR_MODE_DST_ADDR_ENDP_NOT_PRESENT;
-        report.attributeID = ESP_ZB_ZCL_ATTR_POWER_CONFIG_BATTERY_PERCENTAGE_REMAINING_ID;
-        report.cluster_role = ESP_ZB_ZCL_CLUSTER_SERVER_ROLE;
-        report.clusterID = ESP_ZB_ZCL_CLUSTER_ID_POWER_CONFIG;
-        report.zcl_basic_cmd.src_endpoint = ZB_ENDPOINT;
-        esp_zb_lock_acquire(portMAX_DELAY);
-        ESP_ERROR_CHECK_WITHOUT_ABORT(esp_zb_zcl_report_attr_cmd_req(&report));
-        esp_zb_lock_release();
-    }
 }
 
 // Clusters
@@ -277,34 +266,32 @@ auto Zigbee::action(esp_zb_core_action_callback_id_t callback_id, const void *me
 }
 auto Zigbee::action_set_attribut(const esp_zb_zcl_set_attr_value_message_t *message) -> esp_err_t {
     ESP_RETURN_ON_FALSE(message, ESP_FAIL, TAG, "Empty message");
-    ESP_RETURN_ON_FALSE(message->info.status == ESP_ZB_ZCL_STATUS_SUCCESS, ESP_ERR_INVALID_ARG, TAG,
+    ESP_RETURN_ON_FALSE(message->info.status == ESP_ZB_ZCL_STATUS_SUCCESS,
+                        ESP_ERR_INVALID_ARG,
+                        TAG,
                         "Received message: error status(%d)", message->info.status);
 
     ESP_LOGI(TAG, "Received message: endpoint(%d), cluster(0x%x), attribute(0x%x), data size(%d) data type(0x%x)",
-             message->info.dst_endpoint, message->info.cluster,
-             message->attribute.id, message->attribute.data.size, message->attribute.data.type);
+             message->info.dst_endpoint,
+             message->info.cluster,
+             message->attribute.id,
+             message->attribute.data.size,
+             message->attribute.data.type);
 
-    // switch (data.type) {
+    if (message->info.dst_endpoint == ZB_ENDPOINT &&
+        message->info.cluster == ESP_ZB_ZCL_CLUSTER_ID_METERING &&
+        message->attribute.id == ESP_ZB_ZCL_ATTR_METERING_CURRENT_SUMMATION_DELIVERED_ID &&
+        message->attribute.data.type == ESP_ZB_ZCL_ATTR_TYPE_U48) {
 
-    //     case ESP_ZB_ZCL_ATTR_TYPE_BOOL: {
-    //         auto v = *(bool *)data.value;
-    //         ESP_LOGI(TAG, "bool: {%d}", v);
-    //         break;
-    //     }
+        ESP_ERROR_CHECK(esp_event_post_to(m_event_loop,
+                                          APP_EVENTS,
+                                          EV_ZB_ATTR_UPDATE,
+                                          message->attribute.data.value,
+                                          message->attribute.data.size,
+                                          portMAX_DELAY));
+    }
 
-    //     case ESP_ZB_ZCL_ATTR_TYPE_U16: {
-    //         auto value = *(uint16_t *)data.value;
-    //         ESP_LOGI(TAG, "uint16_t: {%d}", value);
-    //         break;
-    //     }
-
-    //     default:
-    //         ESP_LOGW(TAG, "type: {%d}", data.type);
-    //         break;
-    // }
-
-    esp_err_t ret = ESP_OK;
-    return ret;
+    return ESP_OK;
 }
 auto Zigbee::action_identify_notify(uint8_t identify_on) -> void {
     ESP_ERROR_CHECK(esp_event_post_to(m_event_loop,
@@ -416,4 +403,6 @@ auto Zigbee::signal_sterring(esp_err_t err) -> void {
                                       &data,
                                       1,
                                       portMAX_DELAY));
+}
+
 }

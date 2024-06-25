@@ -4,7 +4,6 @@
 #include <esp_log.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
-#include <nvs_flash.h>
 
 ESP_EVENT_DEFINE_BASE(APP_EVENTS);
 
@@ -115,12 +114,16 @@ auto BalthaZar::event_handler(esp_event_base_t,
             ESP_LOGI(TAG, "EV_BT_0");
             ESP_LOGI(TAG, "counter: %llu", state.summation_delivered);
             debug_info();
+
+            state.battery_percent = state.summation_delivered * 5 % 200;
+            zigbee.update_then_report(Zigbee::AttributeBatteryPercentage(state.battery_percent));
+
             break;
         case EV_BT_1:
             ESP_LOGI(TAG, "EV_BT_1");
             state.summation_delivered += 1;
             save();
-            zigbee.update_and_report(state.summation_delivered);
+            zigbee.update_then_report(Zigbee::AttributeSummationDelivered(state.summation_delivered));
 
             break;
         default:
@@ -146,7 +149,7 @@ auto BalthaZar::led_task() -> void {
 auto BalthaZar::zigbee_task() -> void {
     ESP_LOGI(TAG, "Zigbee task started");
 
-    zigbee.start();
+    zigbee.start(state);
     zigbee.loop();
 
     vTaskDelete(nullptr);

@@ -5,6 +5,7 @@
 
 struct State {
     uint64_t summation_delivered;
+    uint8_t battery_percent;
 };
 
 /**

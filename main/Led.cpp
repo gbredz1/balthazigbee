@@ -8,11 +8,11 @@
 using namespace std;
 
 const uint32_t HALF_LED_MAX = 16;
-const double LOOP_STEP = 0.05;
+const double LOOP_STEP = 0.02;
 
-static const char *TAG = "BALTHAZAR_LED";
+constexpr const char *TAG = "BALTHAZAR_LED";
 
-Led::Led() : m_color{0, 0, 0} {
+Led::Led() {
     led_strip_config_t strip_config = {
         .strip_gpio_num = BLINK_GPIO,             // The GPIO that connected to the LED strip's data line
         .max_leds = 1,                            // The number of LEDs in the strip,
@@ -43,9 +43,9 @@ auto Led::update() -> void {
 
     m_anim = fmod(m_anim + LOOP_STEP, M_PI * 2.0);
 
-    m_color.red = HALF_LED_MAX + round(sin(m_anim) * HALF_LED_MAX);
-    m_color.green = HALF_LED_MAX + round(sin(m_anim + M_PI * 0.67) * HALF_LED_MAX);
-    m_color.blue = HALF_LED_MAX + round(sin(m_anim + M_PI * 1.34) * HALF_LED_MAX);
+    m_color.red = static_cast<uint32_t>(HALF_LED_MAX + round(sin(m_anim) * HALF_LED_MAX));
+    m_color.green = static_cast<uint32_t>(HALF_LED_MAX + round(sin(m_anim + M_PI * 0.67) * HALF_LED_MAX));
+    m_color.blue = static_cast<uint32_t>(HALF_LED_MAX + round(sin(m_anim + M_PI * 1.34) * HALF_LED_MAX));
 
     led_strip_set_pixel(m_handle, 0, m_color.red, m_color.green, m_color.blue);
     led_strip_refresh(m_handle);

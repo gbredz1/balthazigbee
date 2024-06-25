@@ -1,7 +1,11 @@
 #pragma once
 
+#include "StateStore.h"
+#include "ZigbeeAttribute.h"
 #include <esp_event.h>
 #include <esp_zigbee_core.h>
+
+namespace Zigbee {
 
 /**
  * @brief Zigbee stuffs
@@ -15,10 +19,12 @@ class Zigbee {
     ~Zigbee();
 
     auto setup(esp_event_loop_handle_t) -> Zigbee &;
-    auto start() -> Zigbee &;
+    auto start(const State) -> Zigbee &;
     auto loop() const -> void;
     auto reset() const -> void;
-    auto update_and_report(uint64_t) const -> void;
+    auto update_then_report(const Attribute) const -> void;
+    auto update(const Attribute) const -> void;
+    auto report(const Attribute) const -> void;
 
     auto signal(const esp_zb_app_signal_t *) -> void;
     auto action(esp_zb_core_action_callback_id_t, const void *) -> esp_err_t;
@@ -40,3 +46,4 @@ class Zigbee {
     auto signal_boot(esp_err_t) -> void;
     auto signal_sterring(esp_err_t) -> void;
 };
+}
