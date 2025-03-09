@@ -11,10 +11,8 @@ constexpr const char *TAG = "BALTHAZAR";
 
 extern "C" void app_main(void) {
     ESP_LOGI(TAG, "Zigbee Gazpar");
-    (new BalthaZar())
-        ->init()
-        .load()
-        .start();
+
+    BalthaZar::instance()->init().load().start();
 }
 
 auto BalthaZar::init() -> BalthaZar & {
@@ -142,8 +140,8 @@ auto BalthaZar::led_task() -> void {
         led.update();
     }
 
-    vTaskDelete(nullptr);
     ESP_LOGI(TAG, "Led task finished");
+    vTaskDelete(nullptr);
 }
 
 auto BalthaZar::zigbee_task() -> void {
@@ -152,8 +150,8 @@ auto BalthaZar::zigbee_task() -> void {
     zigbee.start(state);
     zigbee.loop();
 
-    vTaskDelete(nullptr);
     ESP_LOGI(TAG, "Zigbee task finished");
+    vTaskDelete(nullptr);
 }
 
 auto BalthaZar::identity_mode(bool enabled) -> void {

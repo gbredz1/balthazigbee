@@ -2,26 +2,20 @@
     "configurations": [
         {
             "name": "ESP-IDF",
-            "compilerPath": "${config:idf.toolsPath}/tools/riscv32-esp-elf/esp-13.2.0_20230928/riscv32-esp-elf/bin/riscv32-esp-elf-gcc",
+            "compilerPath": "${config:idf.toolsPath}/tools/riscv32-esp-elf/esp-14.2.0_20241119/riscv32-esp-elf/bin/riscv32-esp-elf-gcc",
+            "compileCommands": "${config:idf.buildPath}/compile_commands.json",
             "includePath": [
                 "${config:idf.espIdfPath}/components/**",
                 "${config:idf.espIdfPathWin}/components/**",
-                "${config:idf.espAdfPath}/components/**",
-                "${config:idf.espAdfPathWin}/components/**",
                 "${workspaceFolder}/**"
             ],
             "browse": {
                 "path": [
-                    "${config:idf.espIdfPath}/components",
-                    "${config:idf.espIdfPathWin}/components",
-                    "${config:idf.espAdfPath}/components/**",
-                    "${config:idf.espAdfPathWin}/components/**",
-                    "${workspaceFolder}/managed_components/**",
+                    "${config:idf.espIdfPath}/cb}/components",
                     "${workspaceFolder}"
                 ],
-                "limitSymbolsToIncludedHeaders": false
-            },
-            "compileCommands": "${workspaceFolder}/build/compile_commands.json"
+                "limitSymbolsToIncludedHeaders": true
+            }
         }
     ],
     "version": 4

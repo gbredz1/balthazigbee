@@ -2,6 +2,7 @@
 
 #include "Buttons.h"
 #include "Led.h"
+#include "Singleton.hpp"
 #include "StateStore.h"
 #include "Zigbee.h"
 
@@ -9,7 +10,7 @@
  * @brief BalthaZar
  * @details Main class, initializes components and manage events.
  */
-class BalthaZar {
+class BalthaZar : public Singleton<BalthaZar> {
   private:
     Led led;
     Zigbee::Zigbee zigbee;

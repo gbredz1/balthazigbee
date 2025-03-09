@@ -46,4 +46,4 @@ class Zigbee {
     auto signal_boot(esp_err_t) -> void;
     auto signal_sterring(esp_err_t) -> void;
 };
-}
+} // namespace Zigbee

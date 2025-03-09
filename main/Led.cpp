@@ -16,8 +16,8 @@ Led::Led() {
     led_strip_config_t strip_config = {
         .strip_gpio_num = BLINK_GPIO,             // The GPIO that connected to the LED strip's data line
         .max_leds = 1,                            // The number of LEDs in the strip,
-        .led_pixel_format = LED_PIXEL_FORMAT_GRB, // Pixel format of your LED strip
         .led_model = LED_MODEL_WS2812,            // LED strip model
+        .color_component_format = LED_STRIP_COLOR_COMPONENT_FMT_GRB, // Pixel format of your LED strip
         .flags{.invert_out = false},              // whether to invert the output signal (useful when your hardware has a level inverter)
     };
 

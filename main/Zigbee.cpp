@@ -9,26 +9,16 @@ namespace Zigbee {
 constexpr const char *TAG = "BALTHAZAR_ZIGBEE";
 static const uint8_t ZB_ENDPOINT = 0x01;
 
-/* Ugly wrap */
-Zigbee *z = nullptr;
-void esp_zb_app_signal_handler(esp_zb_app_signal_t *signal_struct) {
-    if (z == nullptr) {
-        return;
-    }
-
-    z->signal(signal_struct);
-}
-/* Ugly wrap End */
-
+inline static Zigbee *_instance = nullptr;
 Zigbee::Zigbee() {
-    // There can be only one !
-    if (z != nullptr) {
-        delete (z);
+    if (_instance != nullptr) {
+        ESP_LOGE(TAG, "duplicate instance !!!");
+        abort();
     }
-    z = this;
+    _instance = this;
 }
 Zigbee::~Zigbee() {
-    z = nullptr;
+    _instance = nullptr;
 }
 
 auto Zigbee::setup(esp_event_loop_handle_t loop_handle) -> Zigbee & {
@@ -77,20 +67,13 @@ auto Zigbee::start(const State state) -> Zigbee & {
 
     // Start
     esp_zb_core_action_handler_register(
-        [](esp_zb_core_action_callback_id_t callback_id,
-           const void *message) {
-            if (z == nullptr) {
-                return ESP_FAIL;
-            }
-            return z->action(callback_id, message);
+        [](esp_zb_core_action_callback_id_t callback_id, const void *message) {
+            return _instance->action(callback_id, message);
         });
     esp_zb_identify_notify_handler_register(
         ZB_ENDPOINT,
         [](uint8_t identify_on) {
-            if (z == nullptr) {
-                return;
-            }
-            z->action_identify_notify(identify_on);
+            _instance->action_identify_notify(identify_on);
         });
 
     ESP_ERROR_CHECK(esp_zb_set_primary_network_channel_set(ESP_ZB_TRANSCEIVER_ALL_CHANNELS_MASK));
@@ -99,7 +82,7 @@ auto Zigbee::start(const State state) -> Zigbee & {
     return *this;
 }
 auto Zigbee::loop() const -> void {
-    esp_zb_main_loop_iteration();
+    esp_zb_stack_main_loop();
 }
 auto Zigbee::reset() const -> void {
     esp_zb_factory_reset();
@@ -132,7 +115,6 @@ auto Zigbee::report(const Attribute attr) const -> void {
     esp_zb_zcl_report_attr_cmd_t report_attr_cmd;
     report_attr_cmd.address_mode = ESP_ZB_APS_ADDR_MODE_DST_ADDR_ENDP_NOT_PRESENT;
     report_attr_cmd.attributeID = attr.attribute_id;
-    report_attr_cmd.cluster_role = ESP_ZB_ZCL_CLUSTER_SERVER_ROLE;
     report_attr_cmd.clusterID = attr.cluster_id;
     report_attr_cmd.zcl_basic_cmd.src_endpoint = ZB_ENDPOINT;
 
@@ -372,24 +354,24 @@ auto Zigbee::signal_sterring(esp_err_t err) -> void {
                  extended_pan_id[3], extended_pan_id[2], extended_pan_id[1], extended_pan_id[0],
                  esp_zb_get_pan_id(), esp_zb_get_current_channel());
 
-        esp_zb_zdo_ieee_addr_req_param_t ieee_req;
-        ieee_req.addr_of_interest = 0;
-        ieee_req.dst_nwk_addr = 0;
-        ieee_req.request_type = 0;
-        ieee_req.start_index = 0;
+        // esp_zb_zdo_ieee_addr_req_param_t ieee_req;
+        // ieee_req.addr_of_interest = 0;
+        // ieee_req.dst_nwk_addr = 0;
+        // ieee_req.request_type = 0;
+        // ieee_req.start_index = 0;
 
-        esp_zb_zdo_ieee_addr_req(
-            &ieee_req, [](esp_zb_zdp_status_t zdo_status, esp_zb_ieee_addr_t ieee_addr, void *user_ctx) {
-                if (zdo_status != ESP_ZB_ZDP_STATUS_SUCCESS) {
-                    ESP_LOGE(TAG, "zdo_status: 0x%02x", zdo_status);
-                    return;
-                }
+        // esp_zb_zdo_ieee_addr_req(
+        //     &ieee_req, [](esp_zb_zdp_status_t zdo_status, esp_zb_ieee_addr_t ieee_addr, void *user_ctx) {
+        //         if (zdo_status != ESP_ZB_ZDP_STATUS_SUCCESS) {
+        //             ESP_LOGE(TAG, "zdo_status: 0x%02x", zdo_status);
+        //             return;
+        //         }
 
-                ESP_LOGI(TAG, "IEEE address: %02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x",
-                         ieee_addr[7], ieee_addr[6], ieee_addr[5], ieee_addr[4],
-                         ieee_addr[3], ieee_addr[2], ieee_addr[1], ieee_addr[0]);
-            },
-            NULL);
+        //         ESP_LOGI(TAG, "IEEE address: %02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x",
+        //                  ieee_addr[7], ieee_addr[6], ieee_addr[5], ieee_addr[4],
+        //                  ieee_addr[3], ieee_addr[2], ieee_addr[1], ieee_addr[0]);
+        //     },
+        //     NULL);
 
     } else {
         ESP_LOGI(TAG, "Network steering was not successful (status: %s)", esp_err_to_name(err));
@@ -405,4 +387,11 @@ auto Zigbee::signal_sterring(esp_err_t err) -> void {
                                       portMAX_DELAY));
 }
 
+} // namespace Zigbee
+
+/**  esp zboss  **/
+void esp_zb_app_signal_handler(esp_zb_app_signal_t *signal_struct) {
+    if (Zigbee::_instance != nullptr) {
+        Zigbee::_instance->signal(signal_struct);
+    }
 }
