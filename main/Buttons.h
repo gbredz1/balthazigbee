@@ -9,7 +9,6 @@
  */
 class Buttons {
   private:
-    bool has_been_setup = false;
     button_handle_t bt_0_handle;
     button_handle_t bt_1_handle;
 

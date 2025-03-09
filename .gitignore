@@ -3,4 +3,9 @@ managed_components/
 sdkconfig
 sdkconfig.old
 
-.vscode/settings.json
+# VS Code Settings
+.vscode/
+
+# Clion IDE CMake build & config
+.idea/
+cmake-build-*/

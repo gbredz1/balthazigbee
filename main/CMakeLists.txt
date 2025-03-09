@@ -1,7 +1,6 @@
 idf_component_register( SRCS 
     "StateStore.cpp" 
-    "Zigbee.cpp" 
-    "ZigbeeAttribute.cpp"
+    "Zigbee.cpp"
     "BalthaZar.cpp" 
     "Led.cpp" 
     "Buttons.cpp"

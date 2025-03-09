@@ -1,10 +1,28 @@
 #pragma once
 
+#include <esp_zigbee_type.h>
 #include <nvs_flash.h>
 
 struct State {
-    uint64_t summation_delivered;
-    uint8_t battery_percent;
+    esp_zb_int48_t summation_delivered;
+    uint8_t battery_percent_remaining;
+
+    auto set_summation_delivered(const uint64_t value) -> void {
+        summation_delivered.low = static_cast<uint32_t>(value);
+        summation_delivered.high = static_cast<int16_t>(value >> 32);
+    }
+
+    auto get_summation_delivered() const -> uint64_t {
+        return static_cast<uint64_t>(summation_delivered.high) << 32 | summation_delivered.low;
+    }
+
+    auto inc_summation_delivered() -> void {
+        summation_delivered.low += 1;
+
+        if (summation_delivered.low == 0) {
+            summation_delivered.high += 1;
+        }
+    }
 };
 
 /**

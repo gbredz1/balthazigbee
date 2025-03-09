@@ -1,18 +1,17 @@
 #include "BalthaZar.h"
 
-#include "AppEvents.h"
 #include <esp_log.h>
-#include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
+
+#include "AppEvents.h"
 
 ESP_EVENT_DEFINE_BASE(APP_EVENTS);
 
-constexpr const char *TAG = "BALTHAZAR";
+constexpr auto TAG = "BALTHAZAR";
 
 extern "C" void app_main(void) {
     ESP_LOGI(TAG, "Zigbee Gazpar");
-
-    BalthaZar::instance()->init().load().start();
+    (new BalthaZar())->init().load().start();
 }
 
 auto BalthaZar::init() -> BalthaZar & {
@@ -21,7 +20,7 @@ auto BalthaZar::init() -> BalthaZar & {
     event_init();
 
     stateStore.init();
-    zigbee.setup(event_handle);
+    zigbee.setup(event_handle, &state);
     buttons.setup(event_handle);
 
     led.stop();
@@ -33,14 +32,14 @@ auto BalthaZar::start() -> void {
     ESP_LOGI(TAG, "start");
     running = true;
 
-    xTaskCreate([](void *m_this) { ((BalthaZar *)m_this)->led_task(); },
+    xTaskCreate([](void *m_this) { static_cast<BalthaZar *>(m_this)->led_task(); },
                 "Led",
                 configMINIMAL_STACK_SIZE + 256,
                 this,
                 tskIDLE_PRIORITY + 5,
                 nullptr);
 
-    xTaskCreate([](void *m_this) { ((BalthaZar *)m_this)->zigbee_task(); },
+    xTaskCreate([](void *m_this) { static_cast<BalthaZar *>(m_this)->zigbee_task(); },
                 "Zigbee",
                 configMINIMAL_STACK_SIZE + 4096,
                 this,
@@ -67,7 +66,7 @@ auto BalthaZar::load() -> BalthaZar & {
 }
 
 auto BalthaZar::event_init() -> void {
-    esp_event_loop_args_t loop_args = {
+    esp_event_loop_args_t const loop_args = {
         .queue_size = 10,
         .task_name = "app_event_task",
         .task_priority = uxTaskPriorityGet(nullptr),
@@ -80,22 +79,19 @@ auto BalthaZar::event_init() -> void {
         APP_EVENTS,
         ESP_EVENT_ANY_ID,
         [](void *m_this,
-           esp_event_base_t event_base,
+           esp_event_base_t,
            int32_t event_id,
            void *event_data) {
-            ((BalthaZar *)m_this)->event_handler(event_base, event_id, event_data);
+            static_cast<BalthaZar *>(m_this)->event_handler(event_id, event_data);
         },
         this));
 }
 
-auto BalthaZar::event_handler(esp_event_base_t,
-                              int32_t event_id,
-                              void *event_data) -> void {
-
+auto BalthaZar::event_handler(const int32_t event_id, void *event_data) -> void {
     switch (event_id) {
         case EV_RESET:
             ESP_LOGI(TAG, "APP_RESET!!!!");
-            zigbee.reset();
+            Zigbee::Zigbee::reset();
             break;
         case EV_ZB_STEERING_START:
             ESP_LOGI(TAG, "ZB_STEERING");
@@ -106,23 +102,25 @@ auto BalthaZar::event_handler(esp_event_base_t,
             led.stop();
             break;
         case EV_ZB_IDENTIFY:
-            identity_mode(0 < *(uint8_t *)event_data);
+            identity_mode(0 < *static_cast<uint8_t *>(event_data));
+            break;
+        case EV_ZB_READY:
+            ESP_LOGI(TAG, "EV_ZB_READY");
+            led.stop();
             break;
         case EV_BT_0:
             ESP_LOGI(TAG, "EV_BT_0");
-            ESP_LOGI(TAG, "counter: %llu", state.summation_delivered);
-            debug_info();
+            state.inc_summation_delivered();
+            save();
+            zigbee.update_then_report(Zigbee::SUMMATION_DELIVERED);
 
-            state.battery_percent = state.summation_delivered * 5 % 200;
-            zigbee.update_then_report(Zigbee::AttributeBatteryPercentage(state.battery_percent));
+            ESP_LOGI(TAG, "counter: %llu", state.get_summation_delivered());
 
             break;
         case EV_BT_1:
             ESP_LOGI(TAG, "EV_BT_1");
-            state.summation_delivered += 1;
-            save();
-            zigbee.update_then_report(Zigbee::AttributeSummationDelivered(state.summation_delivered));
 
+            Zigbee::Zigbee::report(Zigbee::SUMMATION_DELIVERED);
             break;
         default:
             ESP_LOGI(TAG, "Event %lu", event_id);
@@ -147,8 +145,8 @@ auto BalthaZar::led_task() -> void {
 auto BalthaZar::zigbee_task() -> void {
     ESP_LOGI(TAG, "Zigbee task started");
 
-    zigbee.start(state);
-    zigbee.loop();
+    zigbee.start();
+    Zigbee::Zigbee::loop();
 
     ESP_LOGI(TAG, "Zigbee task finished");
     vTaskDelete(nullptr);
@@ -164,7 +162,7 @@ auto BalthaZar::identity_mode(bool enabled) -> void {
 }
 
 auto BalthaZar::debug_info() -> void {
-    char buffer[512] = {0};
+    char buffer[512] = {};
 
     vTaskGetRunTimeStats(buffer);
     ESP_LOGI(TAG, "Runtime Stats:\nTask\t\tAbs Time\t%% Time\n%s", buffer);

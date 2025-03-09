@@ -1,11 +1,13 @@
 #include "StateStore.h"
 
-#include <esp_err.h>
-#include <esp_log.h>
-#include <nvs_flash.h>
+#include "../../../../esp/esp-idf-v5.4.1/components/esp_hw_support/port/include/esp_hw_log.h"
 
-constexpr const char *NAMESPACE = "storage";
-constexpr const char *KEY = "state";
+#include <esp_err.h>
+#include <nvs.h>
+
+constexpr auto TAG = "BALTHAZAR_NVS";
+constexpr auto NAMESPACE = "storage";
+constexpr auto KEY = "state";
 
 StateStore::StateStore() = default;
 
@@ -16,7 +18,13 @@ StateStore::~StateStore() {
 }
 
 auto StateStore::init() -> void {
-    ESP_ERROR_CHECK(nvs_open(NAMESPACE, NVS_READWRITE, &m_store));
+    ESP_LOGW(TAG, "Initializing NVS");
+
+    const auto error = nvs_open(NAMESPACE, NVS_READWRITE, &m_store);
+    if (error != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to open NVS namespace %s", NAMESPACE);
+    }
+
     m_initialized = true;
 }
 

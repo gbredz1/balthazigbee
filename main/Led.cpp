@@ -2,30 +2,30 @@
 
 #include <cmath>
 #include <esp_log.h>
+#include <led_strip.h>
+#include <led_strip_rmt.h>
 
-#define BLINK_GPIO 8
+constexpr uint8_t BLINK_GPIO = 8;
 
-using namespace std;
+constexpr uint32_t HALF_LED_MAX = 16;
+constexpr double LOOP_STEP = 0.02;
 
-const uint32_t HALF_LED_MAX = 16;
-const double LOOP_STEP = 0.02;
-
-constexpr const char *TAG = "BALTHAZAR_LED";
+constexpr auto TAG = "BALTHAZAR_LED";
 
 Led::Led() {
-    led_strip_config_t strip_config = {
-        .strip_gpio_num = BLINK_GPIO,             // The GPIO that connected to the LED strip's data line
-        .max_leds = 1,                            // The number of LEDs in the strip,
-        .led_model = LED_MODEL_WS2812,            // LED strip model
+    constexpr led_strip_config_t strip_config = {
+        .strip_gpio_num = BLINK_GPIO,                                // The GPIO that connected to the LED strip's data line
+        .max_leds = 1,                                               // The number of LEDs in the strip,
+        .led_model = LED_MODEL_WS2812,                               // LED strip model
         .color_component_format = LED_STRIP_COLOR_COMPONENT_FMT_GRB, // Pixel format of your LED strip
-        .flags{.invert_out = false},              // whether to invert the output signal (useful when your hardware has a level inverter)
+        .flags{.invert_out = 0U},                                    // whether to invert the output signal (useful when your hardware has a level inverter)
     };
 
-    led_strip_rmt_config_t rmt_config = {
+    constexpr led_strip_rmt_config_t rmt_config = {
         .clk_src = RMT_CLK_SRC_DEFAULT,    // different clock source can lead to different power consumption
         .resolution_hz = 10 * 1000 * 1000, // 10MHz
         .mem_block_symbols = 0,
-        .flags{.with_dma = false}, // whether to enable the DMA feature
+        .flags{.with_dma = 0U}, // whether to enable the DMA feature
     };
 
     ESP_ERROR_CHECK(led_strip_new_rmt_device(&strip_config, &rmt_config, &m_handle));

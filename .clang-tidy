@@ -18,7 +18,8 @@ Checks: '*,
   -cppcoreguidelines-pro-bounds-array-to-pointer-decay, -hicpp-no-array-decay,
   -cppcoreguidelines-pro-bounds-pointer-arithmetic,
 
-  -llvmlibc-callee-namespace, -llvmlibc-implementation-in-namespace, -llvmlibc-implementation-in-namespace
+  -*-avoid-do-while, -*-unroll-loops, -*-include-cleaner,
+  -llvmlibc-callee-namespace, -llvmlibc-implementation-in-namespace, -llvmlibc-implementation-in-namespace,
 '
 
 #CheckOptions:

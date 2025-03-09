@@ -1,6 +1,7 @@
 #pragma once
 
-#include <led_strip.h>
+#include <cstdint>
+#include <led_strip_types.h>
 
 /**
  * @brief RGB Color
@@ -9,7 +10,8 @@ struct Color {
     uint32_t red;
     uint32_t green;
     uint32_t blue;
-    Color(uint32_t r, uint32_t g, uint32_t b) : red{r}, green{g}, blue{b} {}
+    Color(const uint32_t red, const uint32_t green, const uint32_t blue)
+        : red{red}, green{green}, blue{blue} {}
 };
 
 /**

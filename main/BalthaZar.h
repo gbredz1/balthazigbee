@@ -2,7 +2,6 @@
 
 #include "Buttons.h"
 #include "Led.h"
-#include "Singleton.hpp"
 #include "StateStore.h"
 #include "Zigbee.h"
 
@@ -10,15 +9,15 @@
  * @brief BalthaZar
  * @details Main class, initializes components and manage events.
  */
-class BalthaZar : public Singleton<BalthaZar> {
+class BalthaZar {
   private:
     Led led;
     Zigbee::Zigbee zigbee;
     Buttons buttons;
     StateStore stateStore;
-    bool running;
-    esp_event_loop_handle_t event_handle;
-    State state;
+    bool running = false;
+    esp_event_loop_handle_t event_handle = nullptr;
+    State state = {};
 
   public:
     auto init() -> BalthaZar &;
@@ -28,7 +27,7 @@ class BalthaZar : public Singleton<BalthaZar> {
 
   private:
     auto event_init() -> void;
-    auto event_handler(esp_event_base_t, int32_t, void *) -> void;
+    auto event_handler(int32_t, void *) -> void;
     auto led_task() -> void;
     auto zigbee_task() -> void;
 
