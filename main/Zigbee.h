@@ -7,8 +7,8 @@
 namespace Zigbee {
 
 enum ClusterAttributeTypes {
-    SUMMATION_DELIVERED,
-    BATTERY_PERCENT,
+    CURRENT_SUMMATION_DELIVERED,
+    BATTERY_PERCENTAGE_REMAINING,
 };
 
 /**

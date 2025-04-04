@@ -108,19 +108,25 @@ auto BalthaZar::event_handler(const int32_t event_id, void *event_data) -> void 
             ESP_LOGI(TAG, "EV_ZB_READY");
             led.stop();
             break;
+        case EV_ZB_SET_SUMMATION_DELIVERED:
+            ESP_LOGI(TAG, "EV_ZB_ATTR_UPDATE");
+            state.summation_delivered = *static_cast<esp_zb_int48_t *>(event_data);
+            save();
+            ESP_LOGI(TAG, "update summation_delivered: %llu", state.get_summation_delivered());
+
+            break;
         case EV_BT_0:
             ESP_LOGI(TAG, "EV_BT_0");
-            state.inc_summation_delivered();
-            save();
-            zigbee.update_then_report(Zigbee::SUMMATION_DELIVERED);
-
-            ESP_LOGI(TAG, "counter: %llu", state.get_summation_delivered());
+            Zigbee::Zigbee::report(Zigbee::CURRENT_SUMMATION_DELIVERED);
+            Zigbee::Zigbee::report(Zigbee::BATTERY_PERCENTAGE_REMAINING);
 
             break;
         case EV_BT_1:
             ESP_LOGI(TAG, "EV_BT_1");
-
-            Zigbee::Zigbee::report(Zigbee::SUMMATION_DELIVERED);
+            state.inc_summation_delivered();
+            save();
+            zigbee.update_then_report(Zigbee::CURRENT_SUMMATION_DELIVERED);
+            ESP_LOGI(TAG, "increment summation_delivered: %llu", state.get_summation_delivered());
             break;
         default:
             ESP_LOGI(TAG, "Event %lu", event_id);

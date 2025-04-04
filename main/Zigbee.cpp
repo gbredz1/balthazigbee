@@ -187,7 +187,8 @@ auto Zigbee::add_metering_cluster(esp_zb_cluster_list_t *cluster_list) const -> 
                             ESP_ZB_ZCL_ATTR_ACCESS_READ_WRITE | ESP_ZB_ZCL_ATTR_ACCESS_REPORTING,
                             &state->summation_delivered);
 
-    auto formating = ESP_ZB_ZCL_METERING_FORMATTING_SET(true, 5, 2);
+    // 5 digit + 3 decimal
+    uint8_t formating = ESP_ZB_ZCL_METERING_FORMATTING_SET(false, 5, 3);
     esp_zb_cluster_add_attr(cluster,
                             ESP_ZB_ZCL_CLUSTER_ID_METERING,
                             ESP_ZB_ZCL_ATTR_METERING_SUMMATION_FORMATTING_ID,
@@ -219,7 +220,7 @@ auto Zigbee::add_metering_cluster(esp_zb_cluster_list_t *cluster_list) const -> 
                             ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY,
                             &multiplier);
 
-    esp_zb_uint24_t divisor = {.low = 1, .high = 0};
+    esp_zb_uint24_t divisor = {.low = 1000, .high = 0};
     esp_zb_cluster_add_attr(cluster,
                             ESP_ZB_ZCL_CLUSTER_ID_METERING,
                             ESP_ZB_ZCL_ATTR_METERING_DIVISOR_ID,
@@ -231,21 +232,30 @@ auto Zigbee::add_metering_cluster(esp_zb_cluster_list_t *cluster_list) const -> 
 }
 
 // Actions handlers
-auto Zigbee::action(esp_zb_core_action_callback_id_t callback_id, const void *message) -> esp_err_t {
+auto Zigbee::action(const esp_zb_core_action_callback_id_t callback_id, const void *message) -> esp_err_t {
     esp_err_t result = ESP_OK;
 
     switch (callback_id) {
-        case ESP_ZB_CORE_SET_ATTR_VALUE_CB_ID:
-            result = this->action_set_attribute((esp_zb_zcl_set_attr_value_message_t *)message);
-            break;
+        case ESP_ZB_CORE_SET_ATTR_VALUE_CB_ID: {
+            const auto *const value_message = static_cast<const esp_zb_zcl_set_attr_value_message_t *>(message);
+            result = this->action_set_attribute(value_message);
+        } break;
+
+        case ESP_ZB_CORE_CMD_DEFAULT_RESP_CB_ID: {
+            const auto *const response_message = static_cast<const esp_zb_zcl_cmd_default_resp_message_s *>(message);
+            ESP_LOGI(TAG, "Default Response to cmd: 0x%02x (status: 0x%02x)",
+                     response_message->resp_to_cmd,
+                     response_message->status_code);
+        } break;
 
         default:
-            ESP_LOGW(TAG, "Receive Zigbee action(0x%x) callback", callback_id);
+            ESP_LOGW(TAG, "Unhandled Zigbee action callback (id: 0x%x)", callback_id);
             break;
     }
 
     return result;
 }
+
 auto Zigbee::action_set_attribute(const esp_zb_zcl_set_attr_value_message_t *message) -> esp_err_t {
     ESP_RETURN_ON_FALSE(message, ESP_FAIL, TAG, "Empty message");
     ESP_RETURN_ON_FALSE(message->info.status == ESP_ZB_ZCL_STATUS_SUCCESS,
@@ -267,7 +277,7 @@ auto Zigbee::action_set_attribute(const esp_zb_zcl_set_attr_value_message_t *mes
 
         ESP_ERROR_CHECK(esp_event_post_to(event_loop,
                                           APP_EVENTS,
-                                          EV_ZB_ATTR_UPDATE,
+                                          EV_ZB_SET_SUMMATION_DELIVERED,
                                           message->attribute.data.value,
                                           message->attribute.data.size,
                                           portMAX_DELAY));
